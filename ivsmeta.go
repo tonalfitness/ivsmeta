@@ -15,6 +15,7 @@ import (
 	"github.com/Comcast/gots/packet"
 	"github.com/Comcast/gots/psi"
 	"github.com/tonalfitness/easyid3"
+	"github.com/tonalfitness/ivsmeta/pes"
 )
 
 // Value wraps ID3 track values that have a Prefix and then the
@@ -97,7 +98,7 @@ func Read(r io.Reader) ([]*MetaInfo, error) {
 func readPackets(r io.Reader, metadataPID int) ([]*MetaInfo, error) {
 	meta := []*MetaInfo{}
 	pkt := new(packet.Packet)
-	pesAccumulator := &PESAccumulator{}
+	pesAccumulator := &pes.PESAccumulator{}
 	for {
 		_, err := io.ReadFull(r, pkt[:])
 		if err != nil {
@@ -118,13 +119,13 @@ func readPackets(r io.Reader, metadataPID int) ([]*MetaInfo, error) {
 					return meta, err
 				}
 				meta = append(meta, mi)
-				pesAccumulator = &PESAccumulator{}
+				pesAccumulator = &pes.PESAccumulator{}
 			}
 		}
 	}
 }
 
-func parseID3(pesAccumulator *PESAccumulator) (*MetaInfo, error) {
+func parseID3(pesAccumulator *pes.PESAccumulator) (*MetaInfo, error) {
 	tags, err := easyid3.ReadID3(bytes.NewReader(pesAccumulator.Data))
 	if err != nil {
 		return nil, fmt.Errorf("failed ID3 parse: %w", err)
