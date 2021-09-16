@@ -1,3 +1,7 @@
+/*
+	Start with ivsmeta.Read. Other public API are helpful wrappers around
+	github.com/Comcast/gots.
+*/
 package ivsmeta
 
 import (
@@ -57,6 +61,8 @@ func (mdm MetaDataMap) String() string {
 
 const IVSMetadataStreamType = 21 // PES metatdata
 
+// Read takes a reader pointing to a ts file (or concatenated files like: cat *.ts).
+// No internal buffering is used so that's up to the caller if required.
 func Read(r io.Reader) ([]*MetaInfo, error) {
 	meta := []*MetaInfo{}
 	pat, err := psi.ReadPAT(r)
