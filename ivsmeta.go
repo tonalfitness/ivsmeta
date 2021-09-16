@@ -1,6 +1,7 @@
 /*
-	Start with ivsmeta.Read. Other public API are helpful wrappers around
-	github.com/Comcast/gots.
+	Start with ivsmeta.Read. It does the parsing and returns a list of ID3 blocks
+	along with their presentation times. The ID3 tag values also seems to follow a format
+	which is captured by the Value type.
 */
 package ivsmeta
 
