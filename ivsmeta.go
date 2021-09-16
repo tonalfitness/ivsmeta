@@ -61,15 +61,35 @@ func (mdm MetaDataMap) String() string {
 	return sb.String()
 }
 
+type MetaOptional struct {
+	Error    error
+	MetaInfo *MetaInfo
+}
+
 const IVSMetadataStreamType = 21 // PES metatdata
 
 // Read takes a reader pointing to a ts file (or concatenated files like: cat *.ts).
 // No internal buffering is used so that's up to the caller if required.
 func Read(r io.Reader) ([]*MetaInfo, error) {
+	infoChan := make(chan *MetaOptional, 100)
+	ReadStream(r, infoChan)
 	meta := []*MetaInfo{}
+	for mo := range infoChan {
+		if mo.Error != nil {
+			if errors.Is(mo.Error, io.EOF) {
+				return meta, nil
+			}
+			return meta, mo.Error
+		}
+		meta = append(meta, mo.MetaInfo)
+	}
+	return meta, nil
+}
+
+func getStreamPID(r io.Reader) (int, error) {
 	pat, err := psi.ReadPAT(r)
 	if err != nil {
-		return meta, fmt.Errorf("failed ReadPAT: %w", err)
+		return 0, fmt.Errorf("failed ReadPAT: %w", err)
 	}
 
 	// Find the metadata stream PID from the program map
@@ -78,7 +98,7 @@ func Read(r io.Reader) ([]*MetaInfo, error) {
 	for _, pid := range pmap {
 		pmt, err := psi.ReadPMT(r, pid)
 		if err != nil {
-			return meta, fmt.Errorf("failed ReadPMT: %w", err)
+			return 0, fmt.Errorf("failed ReadPMT: %w", err)
 		}
 		for _, es := range pmt.ElementaryStreams() {
 			if es.StreamType() == IVSMetadataStreamType {
@@ -91,39 +111,66 @@ func Read(r io.Reader) ([]*MetaInfo, error) {
 		}
 	}
 	if metadataPID == 0 {
-		return meta, errors.New("no metadata stream found")
+		return 0, errors.New("no metadata stream found")
 	}
-	return readPackets(r, metadataPID)
+	return metadataPID, nil
 }
 
-func readPackets(r io.Reader, metadataPID int) ([]*MetaInfo, error) {
-	meta := []*MetaInfo{}
+// ReadStream will return infos on the given channel. This function returns immediatly.
+// If MetaOptionals are not consumed from the channel, the underlying read will block
+// so buffer appropriately to your needs. Execution stops on the first error returned
+// in the MetaOptional and the channel will be closed. io.EOF is returned to signal end
+// of the stream.
+func ReadStream(r io.Reader, infoChan chan *MetaOptional) {
+	go func() {
+		metadataPID, err := getStreamPID(r)
+		if err != nil {
+			errInfoChan(err, infoChan)
+			return
+		}
+		readPacketStream(r, metadataPID, infoChan)
+	}()
+}
+
+func readPacketStream(r io.Reader, metadataPID int, infoChan chan *MetaOptional) {
 	pkt := new(packet.Packet)
 	pesAccumulator := &pes.PESAccumulator{}
 	for {
 		_, err := io.ReadFull(r, pkt[:])
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				return meta, nil
+				errInfoChan(io.EOF, infoChan)
+				return
 			}
-			return meta, fmt.Errorf("failed packet read: %w", err)
+			errInfoChan(fmt.Errorf("failed packet read: %w", err), infoChan)
+			return
 		}
 		if pkt.PID() == metadataPID {
 			done, err := pesAccumulator.Write(pkt)
 			if err != nil {
-				return meta, fmt.Errorf("failed accumulation, bailing: %w", err)
+				errInfoChan(fmt.Errorf("failed accumulation, bailing: %w", err), infoChan)
+				return
 			}
 			if done {
 				mi, err := parseID3(pesAccumulator)
 				if err != nil {
-					fmt.Printf("accdata: %#v", string(pesAccumulator.Data))
-					return meta, err
+					errInfoChan(err, infoChan)
+					return
 				}
-				meta = append(meta, mi)
+				infoChan <- &MetaOptional{
+					MetaInfo: mi,
+				}
 				pesAccumulator = &pes.PESAccumulator{}
 			}
 		}
 	}
+}
+
+func errInfoChan(err error, infoChan chan *MetaOptional) {
+	infoChan <- &MetaOptional{
+		Error: err,
+	}
+	close(infoChan)
 }
 
 func parseID3(pesAccumulator *pes.PESAccumulator) (*MetaInfo, error) {
