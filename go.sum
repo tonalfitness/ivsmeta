@@ -1,0 +1,4 @@
+github.com/Comcast/gots v0.0.0-20210729193645-c0b8c9c849f7 h1:X/nJU9LwQuUtlMqP4U7JV7AoyCnt0ZDds0WXEfZL7aA=
+github.com/Comcast/gots v0.0.0-20210729193645-c0b8c9c849f7/go.mod h1:Mk3QwecRoaG2Qh+uiS8t8IOd7QlKl7Xp1ujNRn/zJxw=
+github.com/tonalfitness/easyid3 v0.0.0-20210915221031-3ce95a44b35b h1:qfNb5h2iFku3jslyfz9nz7Ay1K9tF1okJihFfbLxREU=
+github.com/tonalfitness/easyid3 v0.0.0-20210915221031-3ce95a44b35b/go.mod h1:/VvQEcEM9D+S9kmdHMyq2wHH4JNcbycumnaln3nkiv0=
